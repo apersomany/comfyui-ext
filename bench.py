@@ -121,7 +121,8 @@ def parse_arguments():
     parser.add_argument("--dtype", choices=["auto", "fp32", "fp16", "bf16"], default="auto")
     parser.add_argument("--device", default=None, help="override device, such as cpu, cuda, cuda:1, xpu or mps")
     parser.add_argument("--attention", choices=ATTENTION_CHOICES, default=SELECTED_ATTENTION, help="attention implementation")
-    parser.add_argument("--compile", nargs="?", const="default", default=None, metavar="BACKEND", help="compile the diffusion model with torch.compile; use its default backend when none is given")
+    parser.add_argument("--target", choices=("full", "sdpa"), default="full", help="benchmark the full model or an extracted attention shape")
+    parser.add_argument("--compile", nargs="?", const="default", default=None, metavar="BACKEND", help="compile the benchmark target with torch.compile; use its default backend when none is given")
     parser.add_argument("--compile-mode", default=None, metavar="MODE", help="torch.compile mode; specifying a mode enables compilation with its default backend")
     parser.add_argument("--tunable", nargs="?", const="tunableop_results.csv", default=None, metavar="FILE", help="use ROCm TunableOp and tune missing GEMMs during at least one warmup step")
     parser.add_argument("--profile", nargs="?", const="simple", choices=("simple", "full"), default=None, help="profile gpu time split between gemm, sdpa and other ops; 'full' also lists every captured op (adds overhead)")
@@ -437,16 +438,59 @@ class AttentionFlopCounter:
     def __init__(self):
         self.total = 0
         self.enabled = False
+        self.capture_shapes = False
+        self.shapes = []
 
-    def record(self, arguments):
-        if not self.enabled or len(arguments) < 2:
-            return
+    def record(self, arguments, keywords=None, function=None):
+        if not self.enabled and not self.capture_shapes:
+            return None
+        if len(arguments) < 2:
+            return None
         query = arguments[0]
         key = arguments[1]
+        if not isinstance(query, torch.Tensor) or not isinstance(key, torch.Tensor):
+            return None
         if query.ndim not in (3, 4) or key.ndim != query.ndim:
-            return
+            return None
         key_count = key.shape[query.ndim - 2]
-        self.total += 4 * query.numel() * key_count
+        flops = 4 * query.numel() * key_count
+        if self.enabled:
+            self.total += flops
+        if not self.capture_shapes or len(arguments) < 3:
+            return None
+        value = arguments[2]
+        if not isinstance(value, torch.Tensor):
+            return None
+        if keywords is None:
+            keywords = {}
+        heads = arguments[3] if len(arguments) > 3 else keywords.get("heads", keywords.get("num_heads"))
+        if not isinstance(heads, int) or heads <= 0:
+            return None
+        mask = arguments[4] if len(arguments) > 4 else keywords.get("mask")
+        attn_precision = arguments[5] if len(arguments) > 5 else keywords.get("attn_precision")
+        skip_reshape = arguments[6] if len(arguments) > 6 else keywords.get("skip_reshape", False)
+        skip_output_reshape = arguments[7] if len(arguments) > 7 else keywords.get("skip_output_reshape", False)
+        shape = {
+            "function": function,
+            "query_shape": tuple(query.shape),
+            "key_shape": tuple(key.shape),
+            "value_shape": tuple(value.shape),
+            "query_dtype": query.dtype,
+            "key_dtype": key.dtype,
+            "value_dtype": value.dtype,
+            "heads": heads,
+            "mask_shape": tuple(mask.shape) if isinstance(mask, torch.Tensor) else None,
+            "mask_dtype": mask.dtype if isinstance(mask, torch.Tensor) else None,
+            "attn_precision": attn_precision,
+            "skip_reshape": bool(skip_reshape),
+            "skip_output_reshape": bool(skip_output_reshape),
+            "scale": keywords.get("scale"),
+            "enable_gqa": bool(keywords.get("enable_gqa", False)),
+            "low_precision_attention": keywords.get("low_precision_attention"),
+            "flops": flops,
+        }
+        self.shapes.append(shape)
+        return shape
 
 
 class EvaluationTimer:
@@ -479,9 +523,39 @@ class EvaluationTimer:
 
 def create_attention_override(attention_flop_counter):
     def override(function, *arguments, **keywords):
-        attention_flop_counter.record(arguments)
+        attention_flop_counter.record(arguments, keywords, function)
         with torch.profiler.record_function("sdpa"):
             return function(*arguments, **keywords)
+    return override
+
+
+def attention_placeholder(shape, arguments):
+    query = arguments[0]
+    heads = shape["heads"]
+    if shape["skip_reshape"]:
+        if query.ndim != 4:
+            return None
+        if shape["skip_output_reshape"]:
+            return query.new_zeros(query.shape)
+        return query.new_zeros((query.shape[0], query.shape[2], heads * query.shape[3]))
+    if query.ndim != 3:
+        return None
+    if shape["skip_output_reshape"]:
+        if query.shape[-1] % heads:
+            return None
+        return query.new_zeros((query.shape[0], heads, query.shape[1], query.shape[-1] // heads))
+    return query.new_zeros(query.shape)
+
+
+def create_shape_extraction_override(attention_flop_counter):
+    def override(function, *arguments, **keywords):
+        shape = attention_flop_counter.record(arguments, keywords, function)
+        if shape is None:
+            return function(*arguments, **keywords)
+        output = attention_placeholder(shape, arguments)
+        if output is None:
+            return function(*arguments, **keywords)
+        return output
     return override
 
 
@@ -541,11 +615,13 @@ def summarize_profile(profiler, attention_flop_count):
     return sorted(entries.values(), key=lambda entry: (-entry["time"], entry["type"], entry["name"]))
 
 
-def run_workflow(patcher, arguments, positive, negative, latent):
+def run_workflow(patcher, arguments, positive, negative, latent, steps=None):
+    if steps is None:
+        steps = arguments.steps
     return nodes.KSampler().sample(
         model=patcher,
         seed=arguments.seed,
-        steps=arguments.steps,
+        steps=steps,
         cfg=arguments.cfg,
         sampler_name=arguments.sampler_name,
         scheduler=arguments.scheduler,
@@ -587,15 +663,105 @@ def measure_sampling(patcher, arguments, positive, negative, latent, load_device
     return durations, read_peak_memory(load_device), profile_entries
 
 
-def create_result(arguments, patcher, parameters, context_dimension, pooled_dimension,
+def extract_sdpa_shape(patcher, arguments, positive, negative, latent):
+    attention_flop_counter = AttentionFlopCounter()
+    attention_flop_counter.enabled = True
+    attention_flop_counter.capture_shapes = True
+    transformer_options = patcher.model_options["transformer_options"]
+    previous_override = transformer_options.get("optimized_attention_override")
+    transformer_options["optimized_attention_override"] = create_shape_extraction_override(attention_flop_counter)
+    try:
+        run_workflow(patcher, arguments, positive, negative, latent, steps=1)
+    finally:
+        if previous_override is None:
+            transformer_options.pop("optimized_attention_override", None)
+        else:
+            transformer_options["optimized_attention_override"] = previous_override
+    if not attention_flop_counter.shapes:
+        raise SystemExit("error: no compatible SDPA call was observed")
+    return max(attention_flop_counter.shapes, key=lambda shape: shape["flops"])
+
+
+def create_attention_tensor(shape, dtype, device):
+    if dtype in (torch.float64, torch.float32, torch.float16, torch.bfloat16):
+        return torch.randn(shape, device=device, dtype=dtype)
+    return torch.randn(shape, device=device, dtype=torch.float32).to(dtype)
+
+
+def create_attention_runner(shape, arguments, mask):
+    attention_function = shape["function"]
+    attention_kwargs = {
+        "mask": mask,
+        "skip_reshape": shape["skip_reshape"],
+        "skip_output_reshape": shape["skip_output_reshape"],
+    }
+    if shape["attn_precision"] is not None:
+        attention_kwargs["attn_precision"] = shape["attn_precision"]
+    if shape["scale"] is not None:
+        attention_kwargs["scale"] = shape["scale"]
+    if shape["enable_gqa"]:
+        attention_kwargs["enable_gqa"] = True
+    if shape["low_precision_attention"] is not None:
+        attention_kwargs["low_precision_attention"] = shape["low_precision_attention"]
+
+    def run_attention(query, key, value):
+        return attention_function(query, key, value, shape["heads"], **attention_kwargs)
+
+    if arguments.compile is None:
+        return run_attention
+    compile_backend = None if arguments.compile == "default" else arguments.compile
+    return torch.compile(run_attention, backend=compile_backend, mode=arguments.compile_mode)
+
+
+def measure_sdpa(shape, arguments, load_device):
+    query = create_attention_tensor(shape["query_shape"], shape["query_dtype"], load_device)
+    key = create_attention_tensor(shape["key_shape"], shape["key_dtype"], load_device)
+    value = create_attention_tensor(shape["value_shape"], shape["value_dtype"], load_device)
+    mask = None
+    if shape["mask_shape"] is not None:
+        if shape["mask_dtype"] == torch.bool:
+            mask = torch.ones(shape["mask_shape"], device=load_device, dtype=torch.bool)
+        else:
+            mask = torch.zeros(shape["mask_shape"], device=load_device, dtype=shape["mask_dtype"])
+    attention_runner = create_attention_runner(shape, arguments, mask)
+    profiler = create_profiler(load_device) if arguments.profile is not None else None
+    reset_peak_memory(load_device)
+    durations = []
+    for evaluation in range(arguments.steps):
+        if arguments.tunable is not None and evaluation == arguments.warmup_steps:
+            torch.cuda.tunable.tuning_enable(False)
+        if profiler is not None and evaluation == arguments.warmup_steps:
+            profiler.start()
+        synchronize(load_device)
+        start = time.perf_counter()
+        if profiler is None:
+            output = attention_runner(query, key, value)
+        else:
+            with torch.profiler.record_function("sdpa"):
+                output = attention_runner(query, key, value)
+        synchronize(load_device)
+        duration = time.perf_counter() - start
+        if evaluation >= arguments.warmup_steps:
+            durations.append(duration)
+        del output
+        if profiler is not None and evaluation == arguments.steps - 1:
+            profiler.stop()
+    if not durations:
+        raise SystemExit(f"error: benchmark produced no evaluations after {arguments.warmup_steps} warmup steps")
+    profile_entries = summarize_profile(profiler, shape["flops"]) if profiler is not None else None
+    return durations, read_peak_memory(load_device), profile_entries
+
+
+def create_result(arguments, architecture, data_type, parameters, context_dimension, pooled_dimension,
                   durations, peak_memory, load_device, profile_entries):
     median_seconds = statistics.median(durations)
     result = {
+        "target": "full",
         "model": arguments.model,
-        "architecture": patcher.model.model_config.__class__.__name__,
+        "architecture": architecture,
         "device": str(load_device),
         "device_name": comfy.model_management.get_torch_device_name(load_device),
-        "data_type": str(patcher.model.get_dtype()),
+        "data_type": data_type,
         "parameters": parameters,
         "width": arguments.width,
         "height": arguments.height,
@@ -626,6 +792,31 @@ def create_result(arguments, patcher, parameters, context_dimension, pooled_dime
     }
     if profile_entries is not None:
         result["profile"] = profile_entries
+    return result
+
+
+def create_sdpa_result(arguments, architecture, data_type, parameters, context_dimension, pooled_dimension,
+                       shape, durations, peak_memory, load_device, profile_entries):
+    result = create_result(
+        arguments, architecture, data_type, parameters, context_dimension, pooled_dimension,
+        durations, peak_memory, load_device, profile_entries)
+    attention_function = shape["function"]
+    result.update({
+        "target": "sdpa",
+        "attention_function": getattr(attention_function, "__name__", type(attention_function).__name__),
+        "query_shape": list(shape["query_shape"]),
+        "key_shape": list(shape["key_shape"]),
+        "value_shape": list(shape["value_shape"]),
+        "query_dtype": str(shape["query_dtype"]),
+        "key_dtype": str(shape["key_dtype"]),
+        "value_dtype": str(shape["value_dtype"]),
+        "heads": shape["heads"],
+        "mask_shape": list(shape["mask_shape"]) if shape["mask_shape"] is not None else None,
+        "mask_dtype": str(shape["mask_dtype"]) if shape["mask_dtype"] is not None else None,
+        "attention_flops": shape["flops"],
+        "skip_reshape": shape["skip_reshape"],
+        "skip_output_reshape": shape["skip_output_reshape"],
+    })
     return result
 
 
@@ -724,6 +915,50 @@ def render_text(result, profile_mode, use_color):
     return "\n".join(lines)
 
 
+def format_shape(shape):
+    return "×".join(str(dimension) for dimension in shape)
+
+
+def render_sdpa_text(result, profile_mode, use_color):
+    rows = [
+        ("model", result["model"]),
+        ("architecture", result["architecture"]),
+        ("device", result["device_name"]),
+        ("data type", result["data_type"].removeprefix("torch.")),
+        ("parameters", format_parameters(result["parameters"])),
+        ("target", "SDPA"),
+        ("attention", f"{result['attention']} · {result['attention_function']}"),
+        ("query", f"{format_shape(result['query_shape'])} · {result['query_dtype'].removeprefix('torch.')}"),
+        ("key", f"{format_shape(result['key_shape'])} · {result['key_dtype'].removeprefix('torch.')}"),
+        ("value", f"{format_shape(result['value_shape'])} · {result['value_dtype'].removeprefix('torch.')}"),
+        ("heads", str(result["heads"])),
+        ("attention FLOPs", f"{result['attention_flops']:,}"),
+    ]
+    if result["mask_shape"] is not None:
+        rows.append(("mask", f"{format_shape(result['mask_shape'])} · {result['mask_dtype'].removeprefix('torch.')}"))
+    if result["compile"]:
+        rows.append(("compile", result["compile"]))
+    if result["compile_mode"]:
+        rows.append(("compile mode", result["compile_mode"]))
+    rows.extend([
+        ("timing", f"{result['warmup_steps']} warmup steps · {result['timed_evaluations']} measured evaluations"),
+        ("median", f"{result['median_seconds'] * 1000:.2f} ms"),
+        ("range", f"{result['minimum_seconds'] * 1000:.2f}–{result['maximum_seconds'] * 1000:.2f} ms"),
+        ("performance", f"{result['evaluations_per_second']:.3f} evaluations/second"),
+    ])
+    if result["peak_memory_bytes"] is not None:
+        rows.append(("peak memory", format_bytes(result["peak_memory_bytes"])))
+    styles = [["label", None] for _ in rows]
+    for index, row in enumerate(rows):
+        if row[0] in ("median", "performance"):
+            styles[index][1] = "emphasis"
+    lines = [style_text("Results", "heading", use_color),
+             render_table(rows, styles=styles, use_color=use_color)]
+    if "profile" in result:
+        lines.extend(("", render_profile(result["profile"], profile_mode, use_color)))
+    return "\n".join(lines)
+
+
 def summarize_profile_buckets(entries):
     buckets = {name: {"time": 0.0, "flops": 0} for name, _ in PROFILE_BUCKETS}
     for entry in entries:
@@ -797,27 +1032,45 @@ def run_benchmark(arguments, show_progress):
 
     patcher, parameters = load_model(state_dict, metadata, model_options, show_progress)
     del state_dict
+    detached = False
     try:
         load_device = patcher.load_device
+        architecture = patcher.model.model_config.__class__.__name__
+        data_type = str(patcher.model.get_dtype())
         if arguments.profile is not None and load_device.type not in ("cuda", "xpu"):
             raise SystemExit("error: --profile requires a cuda or xpu device")
-        configure_tunable(arguments, load_device)
-        if arguments.compile is not None:
-            compile_backend = None if arguments.compile == "default" else arguments.compile
-            patcher.model.diffusion_model = torch.compile(
-                patcher.model.diffusion_model, backend=compile_backend, mode=arguments.compile_mode)
+        if arguments.target == "full":
+            configure_tunable(arguments, load_device)
+            if arguments.compile is not None:
+                compile_backend = None if arguments.compile == "default" else arguments.compile
+                patcher.model.diffusion_model = torch.compile(
+                    patcher.model.diffusion_model, backend=compile_backend, mode=arguments.compile_mode)
 
         positive, context_dimension, pooled_dimension = create_conditioning(
             patcher, arguments.context_length, load_device)
         negative = nodes.ConditioningZeroOut().zero_out(positive)[0]
         latent = nodes.EmptyLatentImage().generate(arguments.width, arguments.height, arguments.batch_size)[0]
 
+        if arguments.target == "sdpa":
+            shape = extract_sdpa_shape(patcher, arguments, positive, negative, latent)
+            del positive, negative, latent
+            configure_tunable(arguments, load_device)
+            patcher.detach()
+            del patcher
+            detached = True
+            durations, peak_memory, profile_entries = measure_sdpa(shape, arguments, load_device)
+            return create_sdpa_result(
+                arguments, architecture, data_type, parameters, context_dimension, pooled_dimension,
+                shape, durations, peak_memory, load_device, profile_entries)
+
         durations, peak_memory, profile_entries = measure_sampling(
             patcher, arguments, positive, negative, latent, load_device)
-        return create_result(arguments, patcher, parameters, context_dimension, pooled_dimension,
-                             durations, peak_memory, load_device, profile_entries)
+        return create_result(
+            arguments, architecture, data_type, parameters, context_dimension, pooled_dimension,
+            durations, peak_memory, load_device, profile_entries)
     finally:
-        patcher.detach()
+        if not detached:
+            patcher.detach()
 
 
 def main():
@@ -831,8 +1084,12 @@ def main():
         raise SystemExit(f"error: model not found: {arguments.model}")
 
     result = run_benchmark(arguments, show_progress)
-    output = render_json(result) if arguments.json else render_text(
-        result, arguments.profile, color_enabled(arguments))
+    if arguments.json:
+        output = render_json(result)
+    elif arguments.target == "sdpa":
+        output = render_sdpa_text(result, arguments.profile, color_enabled(arguments))
+    else:
+        output = render_text(result, arguments.profile, color_enabled(arguments))
     sys.stdout.write(f"{output}\n")
 
 
