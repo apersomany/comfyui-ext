@@ -18,13 +18,14 @@
       };
       mkComfyShell =
         {
+          name,
           packages ? [ ],
           env ? { },
           shellHook ? "",
           torchBackend,
         }:
         let
-          venv = ".venv-${torchBackend}";
+          venv = ".venv-${name}";
         in
         pkgs.mkShell {
           packages = commonPackages ++ packages;
@@ -39,9 +40,11 @@
           '';
         };
       cuda = mkComfyShell {
+        name = "cuda";
         torchBackend = "cu130";
       };
       rocm = mkComfyShell {
+        name = "rocm";
         torchBackend = "rocm7.2";
       };
       xpu =
@@ -64,9 +67,11 @@
           shellHook = ''
             ln -sf ${intel-compute-runtime}/bin/ocloc-* "$UV_PROJECT_ENVIRONMENT/bin/ocloc"
           '';
+          name = "xpu";
           torchBackend = "xpu";
         };
       cpu = mkComfyShell {
+        name = "cpu";
         torchBackend = "cpu";
       };
     in
