@@ -32,7 +32,7 @@
           env = commonEnv // env // { UV_PROJECT_ENVIRONMENT = venv; };
           shellHook = ''
             export TORCHINDUCTOR_CACHE_DIR="$HOME/.cache/torch/inductor"
-            uv venv --allow-existing "$UV_PROJECT_ENVIRONMENT"
+            uv venv --allow-existing --prompt "comfyui-${name}" "$UV_PROJECT_ENVIRONMENT"
             ${shellHook}
             uv pip install --python "$UV_PROJECT_ENVIRONMENT/bin/python" torch torchvision torchaudio --torch-backend ${torchBackend}
             uv pip install --python "$UV_PROJECT_ENVIRONMENT/bin/python" -r comfyui/requirements.txt -r comfyui/manager_requirements.txt
