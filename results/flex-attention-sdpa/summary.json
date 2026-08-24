@@ -1,0 +1,795 @@
+{
+  "metadata": {
+    "model": "Anima Turbo",
+    "device": "cuda:0 AMD Radeon Graphics : native",
+    "torch": "2.13.0+rocm7.2",
+    "dtype": "torch.float16",
+    "context_length": 64,
+    "batch_size": 1
+  },
+  "results": [
+    {
+      "input_size": 512,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "default",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.0004172230837866664,
+        0.0004179640091024339,
+        0.00041291408706456423
+      ],
+      "median_seconds": 0.0004172230837866664,
+      "tflops": 20.58834931672234,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.0003758830134756863,
+        0.00038646796019747853,
+        0.0003837730037048459
+      ],
+      "median_seconds": 0.0003837730037048459,
+      "tflops": 22.382852647463423,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.0002980615827254951,
+        0.00030536105623468757,
+        0.00029604253359138966
+      ],
+      "median_seconds": 0.0002980615827254951,
+      "tflops": 28.819328252413687,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "Flex (Triton 3.8.0 + local patches)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.000509140023496002,
+        0.0005607404746115208,
+        0.0005405709962360561,
+        0.0003092834958806634,
+        0.0003107715165242553,
+        0.0003000259748660028
+      ],
+      "median_seconds": 0.0004099557700101286,
+      "tflops": 20.9533203832886,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "Flex (Triton 3.8.0 + local patches)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.00025809393264353275,
+        0.0002484509604983032,
+        0.00025063002249225974
+      ],
+      "median_seconds": 0.00025063002249225974,
+      "tflops": 34.27336640112732,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "default",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.00037241645622998476,
+        0.00038018100894987583,
+        0.00038000551285222173
+      ],
+      "median_seconds": 0.00038000551285222173,
+      "tflops": 22.604763092846216,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.00044767645886167884,
+        0.0004211250343360007,
+        0.0004458284820429981
+      ],
+      "median_seconds": 0.0004458284820429981,
+      "tflops": 19.26735266584323,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 512,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        1024,
+        128
+      ],
+      "attention_flops": 8589934592,
+      "trial_median_seconds": [
+        0.0003782670246437192,
+        0.0003788979956880212,
+        0.0003775304649025202
+      ],
+      "median_seconds": 0.0003782670246437192,
+      "tflops": 22.708652968338058,
+      "warmup_steps": 6,
+      "timed_evaluations": 10
+    },
+    {
+      "input_size": 1024,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "default",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.0062376509886235,
+        0.006238813046365976
+      ],
+      "median_seconds": 0.006238232017494738,
+      "tflops": 22.03171557046306,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.003753103082999587,
+        0.003782298997975886
+      ],
+      "median_seconds": 0.0037677010404877365,
+      "tflops": 36.47820036544308,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.003314233967103064,
+        0.0032875119941309094
+      ],
+      "median_seconds": 0.0033008729806169868,
+      "tflops": 41.637153043771605,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "Flex (Triton 3.8.0 + local patches)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.0076278430642560124,
+        0.007966337958350778,
+        0.002996989991515875,
+        0.003032870008610189
+      ],
+      "median_seconds": 0.005330356536433101,
+      "tflops": 25.78419520957028,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "Flex (Triton 3.8.0 + local patches)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.002602346008643508,
+        0.002582608023658395
+      ],
+      "median_seconds": 0.0025924770161509514,
+      "tflops": 53.014531128247185,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "default",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.004095654934644699,
+        0.004320279927924275
+      ],
+      "median_seconds": 0.004207967431284487,
+      "tflops": 32.66160104999828,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.004663633997552097,
+        0.00436277303379029
+      ],
+      "median_seconds": 0.004513203515671194,
+      "tflops": 30.45263813049219,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 1024,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        4096,
+        128
+      ],
+      "attention_flops": 137438953472,
+      "trial_median_seconds": [
+        0.004312674980610609,
+        0.004276725929230452
+      ],
+      "median_seconds": 0.00429470045492053,
+      "tflops": 32.00198824449636,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "default",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.09728938899934292,
+        0.09703737206291407
+      ],
+      "median_seconds": 0.0971633805311285,
+      "tflops": 22.63222258768048,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.049413469969294965,
+        0.04920990695245564
+      ],
+      "median_seconds": 0.0493116884608753,
+      "tflops": 44.59436138141449,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "Flex (Triton 3.7.1)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.047762025031261146,
+        0.04757964296732098
+      ],
+      "median_seconds": 0.04767083399929106,
+      "tflops": 46.12932208370223,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "Flex (Triton 3.8.0 + local patches)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.1139094220707193,
+        0.11419400305021554,
+        0.040050474111922085,
+        0.04001970402896404
+      ],
+      "median_seconds": 0.0769799480913207,
+      "tflops": 28.56618262386091,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "Flex (Triton 3.8.0 + local patches)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.03882442100439221,
+        0.038581951055675745
+      ],
+      "median_seconds": 0.038703186030033976,
+      "tflops": 56.81762875659747,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "default",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.05941478395834565,
+        0.05950122303329408
+      ],
+      "median_seconds": 0.05945800349581987,
+      "tflops": 36.98447856068022,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "max-autotune",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.060874657006934285,
+        0.0604972179280594
+      ],
+      "median_seconds": 0.06068593746749684,
+      "tflops": 36.236125654807395,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    },
+    {
+      "input_size": 2048,
+      "backend": "PyTorch (AOTriton Flash)",
+      "compile_mode": "max-autotune-no-cudagraphs",
+      "query_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "key_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "value_shape": [
+        1,
+        16,
+        16384,
+        128
+      ],
+      "attention_flops": 2199023255552,
+      "trial_median_seconds": [
+        0.05951603897847235,
+        0.059809127007611096
+      ],
+      "median_seconds": 0.059662582993041724,
+      "tflops": 36.85766095323874,
+      "warmup_steps": 3,
+      "timed_evaluations": 5
+    }
+  ]
+}
