@@ -35,7 +35,7 @@
             uv venv --allow-existing --prompt "comfyui-${name}" "$UV_PROJECT_ENVIRONMENT"
             ${shellHook}
             uv pip install --python "$UV_PROJECT_ENVIRONMENT/bin/python" torch torchvision torchaudio --torch-backend ${torchBackend}
-            uv pip install --python "$UV_PROJECT_ENVIRONMENT/bin/python" -r comfyui/requirements.txt -r comfyui/manager_requirements.txt
+            uv pip install --python "$UV_PROJECT_ENVIRONMENT/bin/python" -r requirements.txt -r comfyui/requirements.txt -r comfyui/manager_requirements.txt
             source "$UV_PROJECT_ENVIRONMENT/bin/activate"
           '';
         };
@@ -45,6 +45,7 @@
       };
       rocm = mkComfyShell {
         name = "rocm";
+        env.ROCR_VISIBLE_DEVICES = "0";
         torchBackend = "rocm7.2";
       };
       xpu =
